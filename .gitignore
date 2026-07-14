@@ -1,0 +1,14 @@
+# Entorno virtual
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# Datos reales (contienen nombre del reclamante y domicilio del servicio)
+muestra_limpia/
+muestra_limpia.zip
+
+# Streamlit
+.streamlit/secrets.toml
