@@ -52,11 +52,11 @@ def render_mapa(anio: str, datos):
         for i in range(len(localidades))
     ]
 
-    fig = go.Figure(go.Scattermapbox(
+    fig = go.Figure(go.Scattermap(
         lat=lats,
         lon=lons,
         mode="markers+text",
-        marker=go.scattermapbox.Marker(
+        marker=go.scattermap.Marker(
             size=sizes,
             sizemode="diameter",
             color=locs_n,
@@ -74,7 +74,7 @@ def render_mapa(anio: str, datos):
     ))
 
     fig.update_layout(
-        mapbox=dict(
+        map=dict(
             # "open-street-map" dibuja los limites provinciales con una linea
             # mas marcada que "carto-positron" (que los deja casi invisibles).
             # Son tiles prearmados sin token, no se puede tocar el color/grosor

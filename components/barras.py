@@ -1,7 +1,7 @@
 # components/barras.py
 import streamlit as st
 import plotly.graph_objects as go
-from data.datos import COLORES_TIPO, CARD_BG, TEXT_MAIN, TEXT_MUTED, BORDER
+from data.datos import COLORES_TIPO, CARD_BG, TEXT_MAIN, TEXT_MUTED
 
 
 def hex_to_rgba(hex_color: str, alpha: float) -> str:
@@ -63,6 +63,12 @@ def render_barras(anio: str, datos):
             hovertemplate=f"<b>{tipo} Virtual</b><br>%{{x}}: %{{y}} exp.<extra></extra>",
         ))
 
+    # La leyenda de 5 tipos (nombres largos) y la aclaracion "Presencial vs
+    # Virtual" no entran juntas arriba del grafico sin superponerse. Se
+    # separan: la leyenda de tipos va abajo del grafico (Plotly la
+    # acomoda en varias filas si hace falta) y la aclaracion de
+    # Presencial/Virtual pasa a ser un st.caption debajo del grafico, fuera
+    # del lienzo de Plotly, para que nunca se pisen entre si ni con el titulo.
     fig.update_layout(
         barmode="stack",
         title=dict(
@@ -73,11 +79,11 @@ def render_barras(anio: str, datos):
         plot_bgcolor=CARD_BG,
         paper_bgcolor=CARD_BG,
         font=dict(color=TEXT_MAIN),
-        height=320,
+        height=420,
         legend=dict(
             orientation="h",
-            yanchor="bottom", y=1.02,
-            xanchor="left", x=0,
+            yanchor="top", y=-0.16,
+            xanchor="center", x=0.5,
             font=dict(size=11),
         ),
         yaxis=dict(
@@ -87,16 +93,12 @@ def render_barras(anio: str, datos):
         xaxis=dict(
             gridcolor="rgba(11,33,30,0.10)",
         ),
-        margin=dict(l=60, r=20, t=80, b=40),
-        annotations=[dict(
-            text="Barra izquierda = <b>Presencial</b> (color solido)  ·  Barra derecha = <b>Virtual</b> (mismo color, mas claro)",
-            x=0, y=1.13, xref="paper", yref="paper",
-            showarrow=False,
-            font=dict(size=10, color=TEXT_MUTED),
-            bgcolor=CARD_BG,
-            bordercolor=BORDER,
-            borderwidth=1,
-        )],
+        margin=dict(l=60, r=20, t=50, b=120),
     )
 
     st.plotly_chart(fig, width='stretch')
+    st.caption(
+        "Barra izquierda = **Presencial** (color sólido) · Barra derecha = "
+        "**Virtual** (mismo color, más claro). La leyenda de colores "
+        "identifica el tipo de reclamo."
+    )
