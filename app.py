@@ -16,7 +16,7 @@ st.set_page_config(
 # CSS global - Estilo 4: Teal Profesional (fondo gris claro)
 st.markdown("""<style>
 .main { background-color: #EEF2F1; }
-.block-container { padding-top: 1rem; padding-bottom: 1rem; }
+.block-container { padding-top: 2.5rem; padding-bottom: 1rem; }
 div[data-testid="metric-container"] {
     background: #FAFCFB;
     border: 0.5px solid #DCE6E4;
