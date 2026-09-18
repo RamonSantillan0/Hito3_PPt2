@@ -10,13 +10,10 @@ st.set_page_config(
     page_title="ENRESE · Sistema de Reclamos",
     page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 # CSS global - Estilo 4: Teal Profesional (fondo gris claro)
-# Nota: los colores de texto secundario se oscurecieron a proposito (contraste
-# ~8:1 sobre fondo claro) porque el dashboard se proyecta y los grises claros
-# quedaban poco legibles en pantalla grande / con luz ambiente.
 st.markdown("""<style>
 .main { background-color: #EEF2F1; }
 .block-container { padding-top: 1rem; padding-bottom: 1rem; }
@@ -34,16 +31,9 @@ h1, h2, h3 { color: #0B211E; }
     font-size: 14px; font-weight: 700; color: #33504C;
     text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.5rem;
 }
-
-/* Captions de Streamlit (st.caption): por defecto usan un gris claro que
-   se lava bajo proyector, se oscurecen para que sean legibles */
 [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p {
     color: #33504C !important;
 }
-
-/* KPI: distinguir el total general (1 tarjeta, acentuada) del Top 3 de
-   tipos de reclamo (grupo de 3 tarjetas), para que no se lean como 4
-   indicadores equivalentes. */
 .st-key-kpi_total {
     padding-right: 1.25rem;
     border-right: 1px solid #DCE6E4;
@@ -55,57 +45,36 @@ h1, h2, h3 { color: #0B211E; }
 .st-key-kpi_top3 div[data-testid="metric-container"] {
     background: #FAFCFB;
 }
-
-/* Barra superior nativa de Streamlit (donde estan "Deploy" y el menu "...") */
 header[data-testid="stHeader"] {
     background: #EEF2F1;
     border-bottom: 1px solid #DCE6E4;
 }
 
-/* Selector de año "incrustado" en esa barra fija: como Streamlit no permite
-   insertar widgets dentro de su propio toolbar, el truco es renderizar el
-   selectbox en un contenedor con key propio y reposicionarlo con
-   position:fixed para que quede alineado con la franja del header nativo,
-   a la izquierda de los botones Deploy / menu. */
-.st-key-year_toolbar {
-    position: fixed;
-    top: 0;
-    left: 1rem;
-    height: 2.875rem;
-    display: flex;
-    align-items: center;
-    z-index: 1000001;
+/* Sidebar: mismo tono que el fondo general */
+section[data-testid="stSidebar"] {
+    background-color: #E4EBE9;
+    border-right: 1px solid #DCE6E4;
 }
-.st-key-year_toolbar div[data-testid="stSelectbox"] { width: 190px; }
-.st-key-year_toolbar div[data-testid="stSelectbox"] label { display: none; }
-.st-key-year_toolbar div[data-baseweb="select"] {
-    background: #FAFCFB;
-    border-radius: 6px;
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] p {
+    color: #0B211E !important;
 }
-.st-key-year_toolbar div[data-baseweb="select"] * { color: #0B211E !important; }
-
-/* Deja lugar en el contenido para que el titulo no quede pegado al header */
-.block-container { padding-top: 1.2rem; }
 </style>""", unsafe_allow_html=True)
 
 
 def formatear_anio(a: str, es_demo: bool) -> str:
-    # El año 2026 del dataset de ejemplo es parcial: siempre aclarar en el
-    # selector. Para datos propios no se asume nada sobre si el ultimo año
-    # esta completo o no.
     if es_demo and a == "2026":
         return f"{a} (parcial)"
     return a
 
 
-# -- Header de contenido -------------------------------------------------------
+# ── Header ────────────────────────────────────────────────────────────────────
 st.markdown("## ENRESE `PROTOTIPO HITO 3`")
 
-# -- Fuente de datos: dataset propio, justo debajo del nombre del proyecto -----
-# El dashboard arranca vacio (sin datos de ejemplo precargados) para poder
-# probar el flujo de carga real; los datos de ejemplo quedan como opcion
-# explicita ("Ver con datos de ejemplo") en vez de ser lo que se ve por
-# defecto.
+# ── Carga de datos ────────────────────────────────────────────────────────────
 with st.expander(
     "📂 Cargar dataset propio (reclamos.csv)",
     expanded="datos_bundle" not in st.session_state,
@@ -187,6 +156,28 @@ elif usando_demo:
 else:
     datos_activo = None
 
+# ── Sidebar: filtro global de año ─────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("### 🗓 Filtro")
+    st.markdown("---")
+
+    if datos_activo is not None:
+        anio = st.selectbox(
+            "Año",
+            options=datos_activo.AÑOS,
+            index=0,
+            format_func=lambda a: formatear_anio(a, usando_demo),
+            key="filtro_anio",
+        )
+        st.caption(
+            "Seleccioná un año para filtrar todos los gráficos, "
+            "o dejá \"Todos los años\" para ver el período completo."
+        )
+    else:
+        st.selectbox("Año", options=["Todos los años"], disabled=True, key="filtro_anio_vacio")
+        st.caption("Cargá un dataset para activar el filtro.")
+
+# ── Contenido principal ───────────────────────────────────────────────────────
 if datos_activo is None:
     st.caption("Sistema de gestión de reclamos · sin datos cargados")
     st.divider()
@@ -195,31 +186,16 @@ if datos_activo is None:
         "usá el botón \"Ver con datos de ejemplo\" para ver los gráficos."
     )
 else:
-    # -- Selector de año, fijo en la barra superior (junto a Deploy / menu) -----
-    with st.container(key="year_toolbar"):
-        anio = st.selectbox(
-            "Año", datos_activo.AÑOS, index=0,
-            format_func=lambda a: formatear_anio(a, usando_demo),
-            label_visibility="collapsed",
-        )
-
     if usando_datos_propios:
         st.caption(
             f"Sistema de gestión de reclamos · dataset propio cargado "
             f"({datos_activo.TOTALES['Todos los años']:,} expedientes)".replace(",", ".")
         )
     else:
-        st.caption("Sistema de gestión de reclamos · 2022–2026 (datos de ejemplo)")
+        st.caption("Sistema de gestión de reclamos · 2022–2026 (datos de ejemplo generados aleatoriamente)")
     st.divider()
 
-    # -- KPI Row ------------------------------------------------------------------
     render_kpi(anio, datos_activo)
-
-    # -- Heatmap --------------------------------------------------------------------
     render_heatmap(anio, datos_activo)
-
-    # -- Barras agrupadas apiladas ---------------------------------------------------
     render_barras(anio, datos_activo)
-
-    # -- Mapa -------------------------------------------------------------------------
     render_mapa(anio, datos_activo)

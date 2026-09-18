@@ -1,18 +1,27 @@
 # data/datos.py
 """
-Datos pre-calculados del dashboard ENRESE.
-Fuente original: muestra_limpia/reclamos.csv y muestra_limpia/movimientos.csv
-(encoding latin-1, separador ';', 1.993 expedientes 2022-2026)
+Datos de demostración del dashboard ENRESE.
+Cada vez que se carga el módulo (es decir, cada vez que arranca la app),
+se genera un conjunto de datos aleatorio pero coherente: los subtotales
+siempre cuadran con los totales, las matrices de heatmap y localidad x tipo
+suman correctamente, etc.
 """
+
+import numpy as _np
+
+_rng = _np.random.default_rng()   # semilla diferente en cada arranque
+
+
+# ── Metadatos fijos ────────────────────────────────────────────────────────────
 
 TIPOS = ["F-17", "S-10", "O-03", "S-07", "F-16"]
 
 TIPO_DESC = {
     "F-17": "Cobro indebido",
-    "S-10": "Baja tension",
+    "S-10": "Baja tensión",
     "O-03": "Resarcimiento",
     "S-07": "Demora suministro",
-    "F-16": "Sobrefacturacion",
+    "F-16": "Sobrefacturación",
 }
 
 LOCALIDADES = ["Capital", "La Banda", "Termas", "Añatuya", "Frías"]
@@ -21,140 +30,188 @@ MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "
 
 AÑOS = ["Todos los años", "2022", "2023", "2024", "2025", "2026"]
 
-# --- Totales generales por año ------------------------------------------------
-TOTALES = {
-    "Todos los años": 1993,
-    "2022": 382,
-    "2023": 494,
-    "2024": 666,
-    "2025": 341,
-    "2026": 110,  # parcial
-}
+_ANIOS_NUM = [2022, 2023, 2024, 2025, 2026]
 
-# Año anterior para cálculo de variación
-ANIO_ANTERIOR = {
-    "Todos los años": None,
-    "2022": None,
-    "2023": 382,
-    "2024": 494,
-    "2025": 666,
-    "2026": 341,
-}
 
-# --- Top 5 tipos por año --------------------------------------------------------
-# Formato: { anio: [n_F17, n_S10, n_O03, n_S07, n_F16] }
-TIPOS_N = {
-    "Todos los años": [638, 289, 258, 234, 212],
-    "2022":           [120,  58,  52,  48,  40],
-    "2023":           [158,  72,  64,  58,  52],
-    "2024":           [213,  98,  87,  80,  72],
-    "2025":           [109,  50,  45,  38,  36],
-    "2026":           [ 38,  11,  10,  10,  12],
-}
+# ── Generación aleatoria ───────────────────────────────────────────────────────
 
-# --- Canal de ingreso por año ---------------------------------------------------
-# Formato: { anio: [presencial, virtual] }
-CANAL = {
-    "Todos los años": [1492, 501],
-    "2022":           [ 254, 128],
-    "2023":           [ 379, 115],
-    "2024":           [ 477, 189],
-    "2025":           [ 282,  59],
-    "2026":           [ 100,  10],
-}
+def _distribuir(total: int, n: int, pesos=None) -> list[int]:
+    """Reparte `total` en `n` enteros positivos con distribución proporcional
+    a `pesos` (uniformes si no se dan). La suma siempre es exactamente `total`."""
+    if total == 0:
+        return [0] * n
+    if pesos is None:
+        pesos = _rng.dirichlet(_np.ones(n))
+    else:
+        pesos = _np.array(pesos, dtype=float)
+        pesos /= pesos.sum()
+    vals = (pesos * total).astype(int)
+    diff = total - int(vals.sum())
+    for i in _rng.choice(n, size=abs(diff), replace=False):
+        vals[i] += 1 if diff > 0 else -1
+    return vals.tolist()
 
-# --- Localidades (top 5) por año ------------------------------------------------
-# Formato: { anio: [Capital, La Banda, Termas, Añatuya, Frías] }
-LOCALIDADES_N = {
-    "Todos los años": [755, 381, 128, 75, 61],
-    "2022":           [145,  72,  24, 15, 12],
-    "2023":           [188,  96,  32, 18, 15],
-    "2024":           [252, 128,  43, 25, 20],
-    "2025":           [129,  66,  22, 13, 10],
-    "2026":           [ 41,  19,   7,  4,  4],
-}
 
-# --- Heatmap: Mes x Tipo (todos los años) ---------------------------------------
-# Filas = tipos (F-17...F-16), Columnas = meses (Ene...Dic)
-# Para años individuales, escalar proporcionalmente: MT[i][j] * (total_año / 1993)
-HEATMAP_TODOS = [
-    [85, 88, 55, 52, 38, 22, 28, 52, 45, 50, 68, 55],  # F-17
-    [42, 45, 25, 22, 18, 12, 16, 28, 22, 25, 18, 16],  # S-10
-    [24, 23, 23, 22, 20, 15, 16, 22, 20, 22, 25, 26],  # O-03
-    [28, 30, 22, 20, 18, 14, 16, 22, 20, 18, 16, 10],  # S-07
-    [25, 28, 20, 18, 15, 12, 14, 20, 18, 18, 14, 10],  # F-16
-]
+def _generar() -> dict:
+    """Genera y devuelve todos los datos demo de forma aleatoria."""
+
+    # ── Totales por año ─────────────────────────────────────────────────────
+    # El último año (2026) es parcial: ~15-35 % del promedio de los anteriores.
+    total_global = int(_rng.integers(1400, 3200))
+    # Distribución anual: los primeros 4 años se reparten ~85 % del total;
+    # 2026 (parcial) lleva el resto con un tope extra de ruido.
+    pesos_anios = _rng.dirichlet([2.5, 3.0, 4.0, 2.5, 0.8])
+    totales_anio = _distribuir(total_global, 5, pesos_anios)
+    totales_anio_dict = dict(zip([str(a) for a in _ANIOS_NUM], totales_anio))
+    totales = {"Todos los años": total_global, **totales_anio_dict}
+
+    anio_anterior = {
+        "Todos los años": None,
+        "2022": None,
+        "2023": totales["2022"],
+        "2024": totales["2023"],
+        "2025": totales["2024"],
+        "2026": totales["2025"],
+    }
+
+    # ── Top 5 tipos ─────────────────────────────────────────────────────────
+    # Los 5 tipos cubren ~75-92 % del total; el tipo 1 suele ser el mayor.
+    pesos_tipos = _rng.dirichlet([5.0, 2.5, 2.0, 1.8, 1.5])
+    cobertura = _rng.uniform(0.75, 0.92)
+
+    tipos_n: dict[str, list[int]] = {}
+    for clave, total in totales.items():
+        subtotal = round(total * cobertura)
+        tipos_n[clave] = _distribuir(subtotal, 5, pesos_tipos)
+
+    # ── Canal de ingreso ─────────────────────────────────────────────────────
+    pct_presencial = _rng.uniform(0.60, 0.85)
+    canal: dict[str, list[int]] = {}
+    for clave, total in totales.items():
+        pres = round(total * pct_presencial)
+        canal[clave] = [pres, total - pres]
+
+    # ── Localidades ──────────────────────────────────────────────────────────
+    # Top 5 localidades cubren ~65-85 % del total; Capital suele dominar.
+    pesos_locs = _rng.dirichlet([6.0, 3.5, 1.5, 0.8, 0.6])
+    cobertura_loc = _rng.uniform(0.65, 0.85)
+
+    localidades_n: dict[str, list[int]] = {}
+    for clave, total in totales.items():
+        subtotal = round(total * cobertura_loc)
+        localidades_n[clave] = _distribuir(subtotal, 5, pesos_locs)
+
+    # ── Heatmap: tipo × mes ──────────────────────────────────────────────────
+    # Pesos de estacionalidad: los meses de invierno y comienzo de año tienden
+    # a tener más reclamos, pero añadimos ruido para que no siempre sea igual.
+    base_mes = _np.array([1.3, 1.2, 1.0, 0.9, 0.8, 0.7, 0.7, 0.9, 0.9, 1.0, 1.1, 1.1])
+    base_mes = base_mes * _rng.uniform(0.7, 1.3, size=12)
+    base_mes /= base_mes.sum()
+
+    def _heatmap_para(tipo_totales: list[int]) -> list[list[int]]:
+        matrix = []
+        for tot in tipo_totales:
+            pesos_m = base_mes * _rng.uniform(0.5, 1.5, size=12)
+            pesos_m /= pesos_m.sum()
+            matrix.append(_distribuir(tot, 12, pesos_m))
+        return matrix
+
+    heatmap_todos = _heatmap_para(tipos_n["Todos los años"])
+    heatmap_por_anio = {
+        str(a): _heatmap_para(tipos_n[str(a)])
+        for a in _ANIOS_NUM
+    }
+
+    # ── Tipo × Localidad ─────────────────────────────────────────────────────
+    def _tl_para(tipo_totales: list[int], loc_totales: list[int]) -> list[list[int]]:
+        """Distribuye cada tipo entre localidades respetando los pesos de las localidades."""
+        total_loc = sum(loc_totales)
+        pesos_l = [l / total_loc for l in loc_totales] if total_loc else [1/5]*5
+        return [_distribuir(t, 5, pesos_l) for t in tipo_totales]
+
+    tl_todos = _tl_para(tipos_n["Todos los años"], localidades_n["Todos los años"])
+    tl_por_anio = {
+        str(a): _tl_para(tipos_n[str(a)], localidades_n[str(a)])
+        for a in _ANIOS_NUM
+    }
+
+    return dict(
+        totales=totales,
+        anio_anterior=anio_anterior,
+        tipos_n=tipos_n,
+        canal=canal,
+        localidades_n=localidades_n,
+        heatmap_todos=heatmap_todos,
+        heatmap_por_anio=heatmap_por_anio,
+        tl_todos=tl_todos,
+        tl_por_anio=tl_por_anio,
+    )
+
+
+_d = _generar()
+
+TOTALES        = _d["totales"]
+ANIO_ANTERIOR  = _d["anio_anterior"]
+TIPOS_N        = _d["tipos_n"]
+CANAL          = _d["canal"]
+LOCALIDADES_N  = _d["localidades_n"]
+_HEATMAP_TODOS = _d["heatmap_todos"]
+_HEATMAP_ANIO  = _d["heatmap_por_anio"]
+_TL_TODOS      = _d["tl_todos"]
+_TL_ANIO       = _d["tl_por_anio"]
+
+# Año anterior del delta de KPI
+filas_sin_fecha = 0
+resto_provincial = TOTALES["Todos los años"] - sum(LOCALIDADES_N["Todos los años"])
+total_localidades_distintas = 5
+total_tipos_distintos = 5
 
 
 def get_heatmap(anio: str) -> list:
-    """Devuelve la matriz mes x tipo para el año seleccionado."""
     if anio == "Todos los años":
-        return HEATMAP_TODOS
-    ratio = TOTALES[anio] / TOTALES["Todos los años"]
-    return [
-        [max(0, round(v * ratio)) for v in fila]
-        for fila in HEATMAP_TODOS
-    ]
-
-
-# --- Tipo x Localidad (todos los años) ------------------------------------------
-# TL[tipo_idx][loc_idx] = cantidad
-# Filas = [F-17, S-10, O-03, S-07, F-16]
-# Cols  = [Capital, La Banda, Termas, Añatuya, Frías]
-TL_TODOS = [
-    [307, 187, 41,  3, 32],   # F-17
-    [100,  51, 26,  9,  2],   # S-10
-    [ 89,  36,  4, 49,  9],   # O-03
-    [ 45,  30, 19,  3,  2],   # S-07
-    [ 76,  27, 14,  6,  4],   # F-16
-]
-
-# TL por año individual
-TL_ANIO = {
-    "2022": [[57, 35, 8, 1, 6], [19, 10, 5, 2, 0], [17, 7, 1, 9, 2], [9, 6, 4, 1, 0], [15, 5, 3, 1, 1]],
-    "2023": [[75, 46, 10, 1, 8], [25, 13, 6, 2, 1], [21, 9, 1, 12, 2], [11, 7, 5, 1, 0], [19, 7, 4, 2, 1]],
-    "2024": [[102, 62, 14, 1, 11], [34, 17, 9, 3, 1], [30, 12, 1, 17, 3], [15, 10, 6, 1, 1], [26, 9, 5, 2, 1]],
-    "2025": [[52, 32, 7, 0, 7], [17, 9, 4, 2, 0], [15, 6, 1, 8, 1], [8, 5, 3, 1, 0], [13, 5, 3, 1, 1]],
-    "2026": [[17, 10, 2, 0, 1], [5, 3, 1, 1, 0], [5, 2, 0, 3, 1], [2, 2, 1, 0, 0], [3, 1, 1, 0, 0]],
-}
+        return _HEATMAP_TODOS
+    return _HEATMAP_ANIO[anio]
 
 
 def get_TL(anio: str) -> list:
     if anio == "Todos los años":
-        return TL_TODOS
-    return TL_ANIO[anio]
+        return _TL_TODOS
+    return _TL_ANIO[anio]
 
 
-# --- Coordenadas geograficas de localidades -------------------------------------
+# ── Coordenadas geográficas (fijas, son datos reales) ─────────────────────────
 COORDS = {
-    "Capital":  {"lat": -27.7951, "lon": -64.2615, "tipo_frecuente": "F-17", "nombre_completo": "Ciudad Capital"},
-    "La Banda": {"lat": -27.7117, "lon": -64.1956, "tipo_frecuente": "F-17", "nombre_completo": "La Banda"},
-    "Termas":   {"lat": -27.4893, "lon": -64.8645, "tipo_frecuente": "F-17", "nombre_completo": "Termas de Río Hondo"},
-    "Añatuya":  {"lat": -28.4608, "lon": -62.8347, "tipo_frecuente": "O-03", "nombre_completo": "Añatuya"},
-    "Frías":    {"lat": -28.6463, "lon": -65.1384, "tipo_frecuente": "F-17", "nombre_completo": "Frías"},
+    "Capital":  {"lat": -27.7951, "lon": -64.2615, "tipo_frecuente": TIPOS[0], "nombre_completo": "Ciudad Capital"},
+    "La Banda": {"lat": -27.7117, "lon": -64.1956, "tipo_frecuente": TIPOS[0], "nombre_completo": "La Banda"},
+    "Termas":   {"lat": -27.4893, "lon": -64.8645, "tipo_frecuente": TIPOS[0], "nombre_completo": "Termas de Río Hondo"},
+    "Añatuya":  {"lat": -28.4608, "lon": -62.8347, "tipo_frecuente": TIPOS[2], "nombre_completo": "Añatuya"},
+    "Frías":    {"lat": -28.6463, "lon": -65.1384, "tipo_frecuente": TIPOS[0], "nombre_completo": "Frías"},
 }
 
-# =================================================================================
-# PALETA DE COLORES - Estilo 4: "Teal Profesional"
-# Fondo gris claro, acentos verdeazulados, gráficos con tonos suaves.
-# =================================================================================
+# Actualizar tipo_frecuente con los datos generados
+for _i, _loc in enumerate(LOCALIDADES):
+    _tipo_idx = int(_np.argmax([_TL_TODOS[t][_i] for t in range(5)]))
+    COORDS[_loc]["tipo_frecuente"] = TIPOS[_tipo_idx]
 
-COLOR_PRIMARY      = "#0D9488"   # acento principal
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PALETA DE COLORES - Estilo 4: "Teal Profesional"
+# ═══════════════════════════════════════════════════════════════════════════════
+
+COLOR_PRIMARY      = "#0D9488"
 COLOR_PRIMARY_DARK = "#0F766E"
 COLOR_PRIMARY_MID  = "#2DD4BF"
 COLOR_PRIMARY_DEEP = "#134E4A"
 COLOR_PRIMARY_PALE = "#99F6E4"
 
-# Colores por tipo de reclamo (orden fijo, mismo patrón de contraste que el original)
 COLORES_TIPO = {
-    "F-17": "#0D9488",   # principal
-    "S-10": "#0F766E",   # oscuro
-    "O-03": "#2DD4BF",   # medio / claro
-    "S-07": "#134E4A",   # mas oscuro
-    "F-16": "#99F6E4",   # palido
+    "F-17": "#0D9488",
+    "S-10": "#0F766E",
+    "O-03": "#2DD4BF",
+    "S-07": "#134E4A",
+    "F-16": "#99F6E4",
 }
 
-# Gradiente heatmap: de blanco-verdoso muy claro a teal medio (nada demasiado oscuro)
 HEATMAP_COLORSCALE = [
     [0.0,  "#F0FDFA"],
     [0.35, "#CCFBF1"],
@@ -162,19 +219,14 @@ HEATMAP_COLORSCALE = [
     [1.0,  "#2DD4BF"],
 ]
 
-# Gradiente de burbujas del mapa (segun cantidad de expedientes por localidad).
-# Escala tipo semaforo: verde = pocas, naranja = media, rojo = muchas.
-# (Nota: se sale de la paleta teal a proposito, para lectura rapida de nivel
-# de alerta en el mapa; el resto del dashboard sigue en teal).
 MAPA_BUBBLE_COLORSCALE = [
-    [0.0, "#22C55E"],           # verde - pocas
-    [0.5, "#F97316"],           # naranja - media
-    [1.0, "#DC2626"],           # rojo - muchas
+    [0.0, "#22C55E"],
+    [0.5, "#F97316"],
+    [1.0, "#DC2626"],
 ]
 
-# Fondo del dashboard (tema claro, gris suave para bajar el brillo)
-BG_MAIN    = "#EEF2F1"   # fondo general de la pagina (gris verdoso suave)
-CARD_BG    = "#FAFCFB"   # tarjetas/graficos, mas claro que el fondo general
+BG_MAIN    = "#EEF2F1"
+CARD_BG    = "#FAFCFB"
 BORDER     = "#DCE6E4"
 TEXT_MAIN  = "#0B211E"
-TEXT_MUTED = "#33504C"   # oscurecido para mejor contraste en proyector (8.5:1)
+TEXT_MUTED = "#33504C"
